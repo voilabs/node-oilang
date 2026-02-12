@@ -1,0 +1,22 @@
+{
+    "name": "@voilabs/oilang",
+    "description": "A robust internationalization (i18n) handling library designed for performance and flexibility.",
+    "version": "0.0.1",
+    "module": "src/index.ts",
+    "type": "module",
+    "devDependencies": {
+        "@types/bun": "latest",
+        "@types/pg": "^8.16.0"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    },
+    "homepage": "https://oilang.com",
+    "repository": {
+        "url": "https://github.com/voilabs/node-oilang"
+    },
+    "dependencies": {
+        "ioredis": "^5.9.3",
+        "pg": "^8.18.0"
+    }
+}

@@ -1,0 +1,167 @@
+# OILang
+
+OILang is a robust internationalization (i18n) handling library designed for performance and flexibility. It employs a dual-layer architecture, utilizing a persistent database as the source of truth and a high-performance in-memory or Redis-based store for fast runtime access. This ensures that your application remains responsive while maintaining data integrity and persistence.
+
+## Features
+
+- **Dual-Layer Architecture**: Combines persistent storage with fast caching.
+- **Flexible Storage**: Choose between in-memory storage for simple use cases or Redis for distributed systems.
+- **Customizable Schemas**: Configurable database schema names to fit existing database structures.
+- **Type-Safe**: Built with TypeScript for reliable development.
+
+## Installation
+
+To use OILang, you need to install the package and its peer dependencies.
+
+```bash
+bun add @voilabs/oilang
+```
+
+## Usage
+
+Here is a basic example of how to initialize and use OILang within your application.
+
+```typescript
+import { OILang, PostgreSQL, MemoryStore } from "@voilabs/oilang";
+
+// Initialize the library
+const oilang = new OILang({
+    database: new PostgreSQL(
+        "postgresql://user:password@localhost:5432/dbname",
+        {
+            schemaNames: {
+                keys: "i18n_keys",
+                locales: "i18n_locales",
+            },
+        },
+    ),
+    store: new MemoryStore(),
+});
+
+async function main() {
+    // Connect to database and load data into store
+    await oilang.init();
+
+    // Create a new locale
+    await oilang.createLocale("en-US", "English (US)", "English");
+
+    // Add a translation key
+    await oilang.addTranslation("en-US", {
+        key: "greeting",
+        value: "Hello, World!",
+    });
+
+    // Retrieve translations
+    const translations = await oilang.getAllTranslations("en-US");
+    console.log(translations);
+}
+
+main();
+```
+
+## API Reference
+
+### OILang
+
+The main entry point for the library. It orchestrates the interaction between the database adapter and the store.
+
+#### Constructor
+
+```typescript
+new OILang(config: AdapterConfig)
+```
+
+- `config`: Configuration object containing initialized `database` and `store` instances.
+
+#### Methods
+
+- **`init(): Promise<void>`**
+  Connects to the database and initializes the store by loading existing locales and translations.
+
+- **`createLocale(locale: string, nativeName: string, englishName: string): Promise<Result<Locale>>`**
+  Creates a new locale in the database and updates the store.
+
+- **`deleteLocale(locale: string): Promise<Result<Locale>>`**
+  Deletes a locale and its associated translations from both the database and the store.
+
+- **`addTranslation(locale: string, config: { key: string; value: string }): Promise<Result<Translation>>`**
+  Adds a translation key-value pair for a specific locale.
+
+- **`getAllLocales(): Promise<Result<Locale[]>>`**
+  Retrieves all available locales from the store.
+
+- **`getAllTranslations(locale: string): Promise<Record<string, string>>`**
+  Retrieves all translations for a specific locale from the store. Returns a key-value map.
+
+### Adapters
+
+#### PostgreSQL
+
+Handles persistent storage of locales and translations.
+
+**Constructor**
+
+```typescript
+new PostgreSQL(connectionString: string | ClientConfig, config: { schemaNames: { keys: string; locales: string } })
+```
+
+- `connectionString`: PostgreSQL connection string or configuration object.
+- `config.schemaNames`: Custom table names for keys and locales.
+
+### Stores
+
+Stores handle the runtime access to data. They act as a cache that is synchronized with the database.
+
+#### MemoryStore
+
+Stores data in the application's memory. Suitable for single-instance applications or development.
+
+**Constructor**
+
+```typescript
+new MemoryStore();
+```
+
+#### RedisStore
+
+Stores data in a Redis instance. essential for distributed applications or when data persistence across restarts (without DB reload) is desired.
+
+**Constructor**
+
+```typescript
+new RedisStore(connectionString: string, options?: { prefix?: string })
+```
+
+- `connectionString`: Redis connection URL (default: `redis://localhost:6379`).
+- `options.prefix`: specific prefix for Redis keys (default: `oilang:`).
+
+## Database Schema
+
+The PostgreSQL adapter automatically creates the necessary tables if they do not exist.
+
+### Locales Table
+
+Stores information about supported languages.
+
+- `code` (Primary Key): The locale code (e.g., "en-US").
+- `native_name`: Name of the language in its own script.
+- `english_name`: Name of the language in English.
+- `created_at`: Timestamp of creation.
+- `updated_at`: Timestamp of last update.
+
+### Keys Table
+
+Stores the translation strings.
+
+- `id` (Primary Key): Unique identifier.
+- `key`: The translation key (e.g., "homepage.title").
+- `value`: The translated string.
+- `locale_id` (Foreign Key): References `Locales(code)`.
+
+## Return Types
+
+Most methods return a result object pattern to handle errors gracefully without throwing.
+
+```typescript
+type Result<T> = { error: null; data: T } | { error: Error; data: null };
+```
