@@ -133,13 +133,16 @@ class Translation {
         this.fallbackLocale = fallbackLocale;
     }
 
-    async list(locale: string) {
+    async list(locale: string): Promise<ActionResponse<TranslationData[]>> {
         const response = await this.store.getAll({
             seed: "translations",
             locale,
         });
 
-        return response;
+        return {
+            error: null,
+            data: response as any,
+        };
     }
 
     async create(

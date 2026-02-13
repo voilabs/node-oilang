@@ -14,27 +14,33 @@ const response = (success: boolean, message: string, data: any) => {
     };
 };
 
-export const elysiaHandler = (oilang: OILang, options?: Options) => {
+export const elysiaHandler = (oilang: OILang, options?: Options): Elysia => {
     return new Elysia({ name: "oilang" }).group("/oilang", (app) => {
         app.group("/locales", (localesApp) => {
             localesApp.get("/", async (app) => {
-                const locales = await oilang.locales.list();
-                return response(true, "Locales fetched successfully", locales);
+                const { error, data } = await oilang.locales.list();
+                if (error) {
+                    return response(false, "Failed to fetch locales", error);
+                }
+                return response(true, "Locales fetched successfully", data);
             });
 
             localesApp.post(
                 "/locales",
                 async ({ body }) => {
-                    const translations = await oilang.locales.create(
+                    const { error, data } = await oilang.locales.create(
                         body.locale,
                         body.native_name,
                         body.english_name,
                     );
-                    return response(
-                        true,
-                        "Locale created successfully",
-                        translations,
-                    );
+                    if (error) {
+                        return response(
+                            false,
+                            "Failed to create locale",
+                            error,
+                        );
+                    }
+                    return response(true, "Locale created successfully", data);
                 },
                 {
                     beforeHandle: options?.onAuthHandle,
@@ -50,16 +56,19 @@ export const elysiaHandler = (oilang: OILang, options?: Options) => {
                 "/locales/:localeCode",
                 async ({ body, params }) => {
                     const { localeCode } = params;
-                    const translations = await oilang.locales.update(
+                    const { error, data } = await oilang.locales.update(
                         localeCode,
                         body.native_name,
                         body.english_name,
                     );
-                    return response(
-                        true,
-                        "Locale updated successfully",
-                        translations,
-                    );
+                    if (error) {
+                        return response(
+                            false,
+                            "Failed to update locale",
+                            error,
+                        );
+                    }
+                    return response(true, "Locale updated successfully", data);
                 },
                 {
                     beforeHandle: options?.onAuthHandle,
@@ -73,14 +82,17 @@ export const elysiaHandler = (oilang: OILang, options?: Options) => {
             localesApp.delete(
                 "/locales/:locale",
                 async ({ params }) => {
-                    const translations = await oilang.locales.delete(
+                    const { error, data } = await oilang.locales.delete(
                         params.locale,
                     );
-                    return response(
-                        true,
-                        "Locale deleted successfully",
-                        translations,
-                    );
+                    if (error) {
+                        return response(
+                            false,
+                            "Failed to delete locale",
+                            error,
+                        );
+                    }
+                    return response(true, "Locale deleted successfully", data);
                 },
                 {
                     beforeHandle: options?.onAuthHandle,
@@ -95,13 +107,20 @@ export const elysiaHandler = (oilang: OILang, options?: Options) => {
 
         app.group("/translations", (translationsApp) => {
             translationsApp.get("/:locale", async ({ params, query }) => {
-                const translations = await oilang.translations.list(
+                const { error, data } = await oilang.translations.list(
                     params.locale,
                 );
+                if (error) {
+                    return response(
+                        false,
+                        "Failed to fetch translations",
+                        error,
+                    );
+                }
                 return response(
                     true,
                     "Translations fetched successfully",
-                    translations,
+                    data,
                 );
             });
 
