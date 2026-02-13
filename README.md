@@ -22,7 +22,9 @@ bun add @voilabs/oilang
 Here is a basic example of how to initialize and use OILang within your application.
 
 ```typescript
-import { OILang, PostgreSQL, MemoryStore } from "@voilabs/oilang";
+import { OILang } from "@voilabs/oilang";
+import { PostgreSQL } from "@voilabs/oilang/adapters";
+import { MemoryStore } from "@voilabs/oilang/stores";
 
 // Initialize the library
 const oilang = new OILang({
@@ -164,6 +166,54 @@ new RedisStore(connectionString: string, options?: { prefix?: string })
 
 - `connectionString`: Redis connection URL (default: `redis://localhost:6379`).
 - `options.prefix`: specific prefix for Redis keys (default: `oilang:`).
+
+## Frameworks Support
+
+OILang provides built-in handlers to easily integrate with popular web frameworks.
+
+### Elysia.js
+
+The `elysiaHandler` allows you to expose RESTful API endpoints for managing locales and translations directly from your Elysia application.
+
+#### Usage
+
+```typescript
+import { Elysia } from "elysia";
+import { elysiaHandler } from "@voilabs/oilang/handlers";
+
+const app = new Elysia()
+    .use(elysiaHandler(oilang)) // oilang instance
+    .listen(3000);
+```
+
+#### API Endpoints
+
+The handler exposes the following endpoints under the `/oilang` prefix:
+
+> **Note**: Endpoints marked with `*` support the `onAuthHandle` hook for authentication.
+
+- **GET /oilang/locales**: List all locales.
+- **POST /oilang/locales**: Create a new locale. \*
+- **PUT /oilang/locales/:localeCode**: Update a locale. \*
+- **DELETE /oilang/locales/:locale**: Delete a locale. \*
+- **GET /oilang/translations/:locale**: Get translations for a locale.
+- **POST /oilang/translations/:locale**: Add translations (bulk). \*
+- **PUT /oilang/translations/:locale**: Update translations (bulk). \*
+- **DELETE /oilang/translations/:locale**: Delete translations (bulk). \*
+
+#### Options
+
+You can pass an optional configuration object to `elysiaHandler`:
+
+```typescript
+elysiaHandler(oilang, {
+    onAuthHandle: async ({ request }) => {
+        // Implement authentication logic here
+    },
+});
+```
+
+- `onAuthHandle`: A hook to run before handling requests, useful for authentication.
 
 ## Database Schema
 
