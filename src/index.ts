@@ -320,4 +320,8 @@ export class OILang {
             throw new Error("Failed to load locales or translations");
         }
     }
+
+    async refreshCache() {
+        return await this.init();
+    }
 }

@@ -6,10 +6,13 @@ type ActionResponse<T> =
     | { success: false; error: any };
 
 class Locales {
-    constructor(
-        private schema: string,
-        private client: Client,
-    ) {}
+    private schema: string;
+    private client: Client;
+
+    constructor(schema: string, client: Client) {
+        this.schema = schema;
+        this.client = client;
+    }
 
     async list(): Promise<ActionResponse<LocaleData[]>> {
         try {
@@ -85,11 +88,15 @@ class Locales {
 }
 
 class Translations {
-    constructor(
-        private schema: string,
-        private client: Client,
-        private localesSchema: string,
-    ) {}
+    private schema: string;
+    private client: Client;
+    private localesSchema: string;
+
+    constructor(schema: string, client: Client, localesSchema: string) {
+        this.schema = schema;
+        this.client = client;
+        this.localesSchema = localesSchema;
+    }
 
     async list(): Promise<ActionResponse<TranslationData[]>> {
         try {

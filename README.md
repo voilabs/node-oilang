@@ -200,6 +200,7 @@ The handler exposes the following endpoints under the `/oilang` prefix:
 - **POST /oilang/translations/:locale**: Add translations (bulk). \*
 - **PUT /oilang/translations/:locale**: Update translations (bulk). \*
 - **DELETE /oilang/translations/:locale**: Delete translations (bulk). \*
+- **POST /oilang/refresh**: Refresh the cache. \*
 
 #### Options
 

@@ -26,7 +26,7 @@ export const elysiaHandler = (oilang: OILang, options?: Options): Elysia => {
             });
 
             localesApp.post(
-                "/locales",
+                "/",
                 async ({ body }) => {
                     const { error, data } = await oilang.locales.create(
                         body.locale,
@@ -53,7 +53,7 @@ export const elysiaHandler = (oilang: OILang, options?: Options): Elysia => {
             );
 
             localesApp.put(
-                "/locales/:localeCode",
+                "/:localeCode",
                 async ({ body, params }) => {
                     const { localeCode } = params;
                     const { error, data } = await oilang.locales.update(
@@ -80,7 +80,7 @@ export const elysiaHandler = (oilang: OILang, options?: Options): Elysia => {
             );
 
             localesApp.delete(
-                "/locales/:locale",
+                "/:locale",
                 async ({ params }) => {
                     const { error, data } = await oilang.locales.delete(
                         params.locale,
@@ -213,6 +213,17 @@ export const elysiaHandler = (oilang: OILang, options?: Options): Elysia => {
 
             return translationsApp;
         });
+
+        app.post(
+            "/refresh",
+            async () => {
+                await oilang.refreshCache();
+                return response(true, "Cache refreshed successfully", {});
+            },
+            {
+                beforeHandle: options?.onAuthHandle,
+            },
+        );
 
         return app;
     });
