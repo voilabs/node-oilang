@@ -19,8 +19,6 @@ export class RedisStore {
             code: string;
             native_name: string;
             english_name: string;
-            created_at: string;
-            updated_at: string;
         }>,
         translations: Record<string, Record<string, string>>,
     ) {
@@ -68,8 +66,6 @@ export class RedisStore {
                       code: string;
                       native_name: string;
                       english_name: string;
-                      created_at: string;
-                      updated_at: string;
                   };
               },
     ) {
@@ -174,8 +170,6 @@ export class RedisStore {
                   locale: {
                       native_name: string;
                       english_name: string;
-                      created_at: string;
-                      updated_at: string;
                   };
               },
     ) {

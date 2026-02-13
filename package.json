@@ -1,7 +1,7 @@
 {
     "name": "@voilabs/oilang",
     "description": "A robust internationalization (i18n) handling library designed for performance and flexibility.",
-    "version": "0.0.1",
+    "version": "0.0.6",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
@@ -16,6 +16,11 @@
     "publishConfig": {
         "access": "public"
     },
+    "keywords": [
+        "i18n",
+        "full-stack",
+        "realtime"
+    ],
     "peerDependencies": {
         "typescript": "^5.9.3"
     },
@@ -27,5 +32,8 @@
     "dependencies": {
         "ioredis": "^5.9.3",
         "pg": "^8.18.0"
-    }
+    },
+    "files": [
+        "dist"
+    ]
 }

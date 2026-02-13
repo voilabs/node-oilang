@@ -43,16 +43,17 @@ async function main() {
     await oilang.init();
 
     // Create a new locale
-    await oilang.createLocale("en-US", "English (US)", "English");
+    await oilang.locales.create("en-US", "English (US)", "English");
 
     // Add a translation key
-    await oilang.addTranslation("en-US", {
+    await oilang.translations.create("en-US", {
         key: "greeting",
         value: "Hello, World!",
     });
 
     // Retrieve translations
-    const translations = await oilang.getAllTranslations("en-US");
+    // Example: Translations are stored in memory or Redis as a key-value pair.
+    const translations = await oilang.translations.list("en-US");
     console.log(translations);
 }
 
@@ -63,7 +64,7 @@ main();
 
 ### OILang
 
-The main entry point for the library. It orchestrates the interaction between the database adapter and the store.
+The main entry point for the library. It orchestrates the interaction between the database adapter and the store, delegating specific operations to `locales` and `translations` namespaces.
 
 #### Constructor
 
@@ -78,20 +79,49 @@ new OILang(config: AdapterConfig)
 - **`init(): Promise<void>`**
   Connects to the database and initializes the store by loading existing locales and translations.
 
-- **`createLocale(locale: string, nativeName: string, englishName: string): Promise<Result<Locale>>`**
-  Creates a new locale in the database and updates the store.
+#### Namespaces
 
-- **`deleteLocale(locale: string): Promise<Result<Locale>>`**
-  Deletes a locale and its associated translations from both the database and the store.
+- **`oilang.locales`**: Manages locale operations.
+- **`oilang.translations`**: Manages translation operations.
 
-- **`addTranslation(locale: string, config: { key: string; value: string }): Promise<Result<Translation>>`**
-  Adds a translation key-value pair for a specific locale.
+### Locales
 
-- **`getAllLocales(): Promise<Result<Locale[]>>`**
+Access via `oilang.locales`.
+
+#### Methods
+
+- **`list(): Promise<ActionResponse<LocaleData[]>>`**
   Retrieves all available locales from the store.
 
-- **`getAllTranslations(locale: string): Promise<Record<string, string>>`**
+- **`create(locale: string, nativeName: string, englishName: string): Promise<ActionResponse<LocaleData>>`**
+  Creates a new locale in the database and updates the store.
+
+- **`delete(locale: string): Promise<ActionResponse<LocaleData>>`**
+  Deletes a locale and its associated translations from both the database and the store.
+
+- **`update(locale: string, nativeName: string, englishName: string): Promise<ActionResponse<LocaleData>>`**
+  Updates locale information in the database and store.
+
+### Translations
+
+Access via `oilang.translations`.
+
+#### Methods
+
+- **`list(locale: string): Promise<Record<string, string>>`**
   Retrieves all translations for a specific locale from the store. Returns a key-value map.
+
+- **`create(locale: string, config: { key: string; value: string }): Promise<ActionResponse<TranslationData>>`**
+  Adds a translation key-value pair for a specific locale.
+
+- **`update(locale: string, key: string, newValue: string): Promise<ActionResponse<TranslationData>>`**
+  Updates an existing translation value.
+
+- **`delete(locale: string, key: string): Promise<ActionResponse<TranslationData>>`**
+  Deletes a translation key.
+
+- **`translate(locale: string, key: string, variables?: Record<string, string | number>): Promise<string>`**
+  Retrieves a single translation, optionally performing variable interpolation. Uses fallback locale if translation is missing.
 
 ### Adapters
 
@@ -124,7 +154,7 @@ new MemoryStore();
 
 #### RedisStore
 
-Stores data in a Redis instance. essential for distributed applications or when data persistence across restarts (without DB reload) is desired.
+Stores data in a Redis instance. Essential for distributed applications or when data persistence across restarts (without DB reload) is desired.
 
 **Constructor**
 
@@ -163,5 +193,7 @@ Stores the translation strings.
 Most methods return a result object pattern to handle errors gracefully without throwing.
 
 ```typescript
-type Result<T> = { error: null; data: T } | { error: Error; data: null };
+type ActionResponse<T> =
+    | { error: Error & { code?: string }; data: null }
+    | { error: null; data: T };
 ```

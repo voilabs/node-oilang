@@ -4,8 +4,6 @@ export class MemoryStore {
         code: string;
         native_name: string;
         english_name: string;
-        created_at: string;
-        updated_at: string;
     }> = [];
 
     async load(
@@ -13,8 +11,6 @@ export class MemoryStore {
             code: string;
             native_name: string;
             english_name: string;
-            created_at: string;
-            updated_at: string;
         }>,
         translations: Record<string, Record<string, string>>,
     ) {
@@ -36,8 +32,6 @@ export class MemoryStore {
                       code: string;
                       native_name: string;
                       english_name: string;
-                      created_at: string;
-                      updated_at: string;
                   };
               },
     ) {
@@ -125,8 +119,6 @@ export class MemoryStore {
                   locale: {
                       native_name: string;
                       english_name: string;
-                      created_at: string;
-                      updated_at: string;
                   };
               },
     ) {
