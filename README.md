@@ -196,7 +196,7 @@ The handler exposes the following endpoints under the `/oilang` prefix:
 - **POST /oilang/locales**: Create a new locale. \*
 - **PUT /oilang/locales/:localeCode**: Update a locale. \*
 - **DELETE /oilang/locales/:locale**: Delete a locale. \*
-- **GET /oilang/translations/:locale**: Get translations for a locale.
+- **GET /oilang/translations/:locale**: Get translations for a locale. (format=true for nested format)
 - **POST /oilang/translations/:locale**: Add translations (bulk). \*
 - **PUT /oilang/translations/:locale**: Update translations (bulk). \*
 - **DELETE /oilang/translations/:locale**: Delete translations (bulk). \*

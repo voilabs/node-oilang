@@ -106,23 +106,63 @@ export const elysiaHandler = (oilang: OILang, options?: Options): Elysia => {
         });
 
         app.group("/translations", (translationsApp) => {
-            translationsApp.get("/:locale", async ({ params, query }) => {
-                const { error, data } = await oilang.translations.list(
-                    params.locale,
-                );
-                if (error) {
-                    return response(
-                        false,
-                        "Failed to fetch translations",
-                        error,
+            translationsApp.get(
+                "/:locale",
+                async ({ params, query }) => {
+                    const { format } = query;
+                    const { error, data } = await oilang.translations.list(
+                        params.locale,
                     );
-                }
-                return response(
-                    true,
-                    "Translations fetched successfully",
-                    data,
-                );
-            });
+                    if (error) {
+                        return response(
+                            false,
+                            "Failed to fetch translations",
+                            error,
+                        );
+                    }
+                    if (format === "true") {
+                        const result = Object.entries(data).reduce(
+                            (acc, [fullKey, value]) => {
+                                const keys = fullKey.split(".");
+                                let current = acc;
+
+                                keys.forEach((key, index) => {
+                                    // If we're at the last part of the key, assign the value
+                                    if (index === keys.length - 1) {
+                                        current[key] = value;
+                                    } else {
+                                        // Otherwise, keep nesting
+                                        current[key] = current[key] || {};
+                                        current = current[key];
+                                    }
+                                });
+
+                                return acc;
+                            },
+                            {} as Record<string, any>,
+                        );
+
+                        return response(
+                            true,
+                            "Translations fetched successfully",
+                            result,
+                        );
+                    }
+                    return response(
+                        true,
+                        "Translations fetched successfully",
+                        data,
+                    );
+                },
+                {
+                    params: t.Object({
+                        locale: t.String(),
+                    }),
+                    query: t.Object({
+                        format: t.Optional(t.String()),
+                    }),
+                },
+            );
 
             translationsApp.post(
                 "/:locale",

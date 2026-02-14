@@ -1,4 +1,4 @@
-import { Client, type ClientConfig } from "pg";
+import { Client, Pool, type ClientConfig } from "pg";
 import { LocaleData, TranslationData } from "../types";
 
 type ActionResponse<T> =
@@ -175,7 +175,7 @@ class Translations {
 }
 
 export class PostgreSQL {
-    client: Client;
+    pool: Pool;
     schemaNames: { keys: string; locales: string };
     public locales: Locales;
     public translations: Translations;
@@ -197,24 +197,26 @@ export class PostgreSQL {
                       idleTimeoutMillis: 0,
                       connectionTimeoutMillis: 0,
                   });
-        this.client = new Client(object);
+        this.pool = new Pool(
+            typeof config === "string" ? { connectionString: config } : config,
+        );
         this.schemaNames = customizationConfig.schemaNames ?? {
             keys: "keys",
             locales: "locales",
         };
 
-        this.locales = new Locales(this.schemaNames.locales, this.client);
+        this.locales = new Locales(this.schemaNames.locales, this.pool as any);
         this.translations = new Translations(
             this.schemaNames.keys,
-            this.client,
+            this.pool as any,
             this.schemaNames.locales,
         );
     }
 
     async connect() {
-        await this.client.connect();
-
-        const QUERY = `
+        const client = await this.pool.connect();
+        try {
+            const QUERY = `
             CREATE TABLE IF NOT EXISTS ${this.schemaNames.locales} (
                 code VARCHAR(10) PRIMARY KEY,
                 native_name VARCHAR(255) NOT NULL,
@@ -232,7 +234,10 @@ export class PostgreSQL {
             );
         `;
 
-        await this.client.query(QUERY);
+            await client.query(QUERY);
+        } finally {
+            client.release();
+        }
     }
 
     getSchemaNames() {
