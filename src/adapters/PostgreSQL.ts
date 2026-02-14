@@ -181,12 +181,23 @@ export class PostgreSQL {
     public translations: Translations;
 
     constructor(
-        private config: string | ClientConfig | undefined,
+        config: string | ClientConfig,
         customizationConfig: {
             schemaNames: { keys: string; locales: string };
         },
     ) {
-        this.client = new Client(config);
+        const object =
+            typeof config === "string"
+                ? {
+                      connectionString: config,
+                      idleTimeoutMillis: 0,
+                      connectionTimeoutMillis: 0,
+                  }
+                : Object.assign(config, {
+                      idleTimeoutMillis: 0,
+                      connectionTimeoutMillis: 0,
+                  });
+        this.client = new Client(object);
         this.schemaNames = customizationConfig.schemaNames ?? {
             keys: "keys",
             locales: "locales",
