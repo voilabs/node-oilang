@@ -186,8 +186,8 @@ import { elysiaHandler } from "@voilabs/oilang/handlers";
 
 const app = new Elysia()
     .use(elysiaHandler(oilang)) // oilang instance
-    .get("/", ({ locale }) => {
-        return `Current locale: ${locale}`;
+    .get("/", ({ store }) => {
+        return `Current locale: ${store.locale}`;
     })
     .listen(3000);
 ```
@@ -197,7 +197,6 @@ const app = new Elysia()
 The handler enriches the Elysia context:
 
 - **State**: Adds `locale` to the global state (`store.locale`).
-- **Derive**: Automatically detects `?locale=code` in query parameters and updates `store.locale` for the requests.
 
 #### API Endpoints
 
