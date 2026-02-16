@@ -16,16 +16,17 @@ const response = (success: boolean, message: string, data: any) => {
 
 const ElysiaApp = new Elysia({ name: "oilang" })
     .state("locale", "")
+    .derive(({ store, query }) => {
+        const { locale } = query;
+        if (locale) store.locale = locale;
+        return { ...store };
+    })
     .group("/oilang", (app) => {
         app.post("/set-locale", ({ body, set, store }) => {
             const { locale } = body as { locale: string };
             set.headers["x-oilang-locale"] = locale;
             store.locale = locale;
             return { success: true };
-        }).derive(({ store, query }) => {
-            const { locale } = query;
-            if (locale) store.locale = locale;
-            return { ...store };
         });
 
         app.group("/locales", (localesApp) => {
@@ -117,16 +118,17 @@ type AppType = typeof ElysiaApp;
 export const elysiaHandler = (oilang: OILang, options?: Options): AppType => {
     return new Elysia({ name: "oilang" })
         .state("locale", "")
+        .derive(({ store, query }) => {
+            const { locale } = query;
+            if (locale) store.locale = locale;
+            return { ...store };
+        })
         .group("/oilang", (app) => {
             app.post("/set-locale", ({ body, set, store }) => {
                 const { locale } = body as { locale: string };
                 set.headers["x-oilang-locale"] = locale;
                 store.locale = locale;
                 return { success: true };
-            }).derive(({ store, query }) => {
-                const { locale } = query;
-                if (locale) store.locale = locale;
-                return { ...store };
             });
 
             app.group("/locales", (localesApp) => {
