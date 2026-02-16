@@ -81,6 +81,9 @@ new OILang(config: AdapterConfig)
 - **`init(): Promise<void>`**
   Connects to the database and initializes the store by loading existing locales and translations.
 
+- **`refreshCache(): Promise<void>`**
+  Refreshes the internal cache by reloading data from the database.
+
 #### Namespaces
 
 - **`oilang.locales`**: Manages locale operations.
@@ -183,8 +186,18 @@ import { elysiaHandler } from "@voilabs/oilang/handlers";
 
 const app = new Elysia()
     .use(elysiaHandler(oilang)) // oilang instance
+    .get("/", ({ locale }) => {
+        return `Current locale: ${locale}`;
+    })
     .listen(3000);
 ```
+
+#### Context & Derive
+
+The handler enriches the Elysia context:
+
+- **State**: Adds `locale` to the global state (`store.locale`).
+- **Derive**: Automatically detects `?locale=code` in query parameters and updates `store.locale` for the requests.
 
 #### API Endpoints
 
@@ -192,15 +205,93 @@ The handler exposes the following endpoints under the `/oilang` prefix:
 
 > **Note**: Endpoints marked with `*` support the `onAuthHandle` hook for authentication.
 
-- **GET /oilang/locales**: List all locales.
-- **POST /oilang/locales**: Create a new locale. \*
-- **PUT /oilang/locales/:localeCode**: Update a locale. \*
-- **DELETE /oilang/locales/:locale**: Delete a locale. \*
-- **GET /oilang/translations/:locale**: Get translations for a locale. (format=true for nested format)
-- **POST /oilang/translations/:locale**: Add translations (bulk). \*
-- **PUT /oilang/translations/:locale**: Update translations (bulk). \*
-- **DELETE /oilang/translations/:locale**: Delete translations (bulk). \*
-- **POST /oilang/refresh**: Refresh the cache. \*
+##### Locales
+
+- **`POST /oilang/set-locale`**
+  Sets the current locale for the session/request.
+    - **Body**: `{ locale: string }`
+
+- **`GET /oilang/locales`**
+  List all available locales.
+
+- **`POST /oilang/locales`** \*
+  Create a new locale.
+    - **Body**:
+        ```typescript
+        {
+            locale: string;
+            native_name: string;
+            english_name: string;
+        }
+        ```
+
+- **`PUT /oilang/locales/:localeCode`** \*
+  Update an existing locale.
+    - **Params**: `localeCode` (string)
+    - **Body**:
+        ```typescript
+        {
+            native_name: string;
+            english_name: string;
+        }
+        ```
+
+- **`DELETE /oilang/locales/:locale`** \*
+  Delete a locale.
+    - **Params**: `locale` (string)
+
+##### Translations
+
+- **`GET /oilang/translations/:locale`**
+  Get translations for a specific locale.
+    - **Params**: `locale` (string)
+    - **Query**: `format` (optional, "true" for nested JSON)
+
+- **`POST /oilang/translations/:locale`** \*
+  Add multiple translations.
+    - **Params**: `locale` (string)
+    - **Body**:
+        ```typescript
+        {
+            translations: {
+                key: string;
+                value: string;
+            }
+            [];
+        }
+        ```
+
+- **`PUT /oilang/translations/:locale`** \*
+  Update multiple translations.
+    - **Params**: `locale` (string)
+    - **Body**:
+        ```typescript
+        {
+            translations: {
+                key: string;
+                value: string;
+            }
+            [];
+        }
+        ```
+
+- **`DELETE /oilang/translations/:locale`** \*
+  Delete multiple translations.
+    - **Params**: `locale` (string)
+    - **Body**:
+        ```typescript
+        {
+            translations: {
+                key: string;
+            }
+            [];
+        }
+        ```
+
+##### System
+
+- **`POST /oilang/refresh`** \*
+  Refresh the internal cache from the database.
 
 #### Options
 
@@ -218,7 +309,7 @@ elysiaHandler(oilang, {
 
 ## Database Schema
 
-The PostgreSQL adapter automatically creates the necessary tables if they do not exist.
+The Database adapter automatically creates the necessary tables if they do not exist.
 
 ### Locales Table
 
@@ -247,4 +338,37 @@ Most methods return a result object pattern to handle errors gracefully without 
 type ActionResponse<T> =
     | { error: Error & { code?: string }; data: null }
     | { error: null; data: T };
+```
+
+## Utils
+
+OILang provides utility functions to help with string manipulation for i18n.
+
+### Wrap & Unwrap
+
+Helper functions to handle multi-language strings formats used in some legacy systems or specific storage patterns.
+
+#### `wrap(locales: Record<string, string>): string`
+
+Wraps a dictionary of locale-value pairs into a single string format `<locale>value</locale>`.
+
+```typescript
+import { wrap } from "@voilabs/oilang/utils";
+
+const wrapped = wrap({
+    "en-US": "Hello",
+    "tr-TR": "Merhaba",
+});
+// Output: "<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>"
+```
+
+#### `unwrap(string: string, locale: string, fallbackLocale?: string): string`
+
+Extracts the value for a specific locale from a wrapped string.
+
+```typescript
+import { unwrap } from "@voilabs/oilang/utils";
+
+const value = unwrap("<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>", "tr-TR");
+// Output: "Merhaba"
 ```

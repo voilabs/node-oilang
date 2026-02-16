@@ -1,7 +1,7 @@
 {
     "name": "@voilabs/oilang",
     "description": "A robust internationalization (i18n) handling library designed for performance and flexibility.",
-    "version": "0.0.17",
+    "version": "0.0.18",
     "main": "dist/index.js",
     "types": "dist/index.d.ts",
     "scripts": {
@@ -25,6 +25,10 @@
         "./handlers": {
             "types": "./dist/handlers/index.d.ts",
             "import": "./dist/handlers/index.js"
+        },
+        "./utils": {
+            "types": "./dist/utils/index.d.ts",
+            "import": "./dist/utils/index.js"
         },
         "./types": {
             "types": "./dist/types.d.ts"
@@ -52,6 +56,7 @@
         "url": "git+https://github.com/voilabs/node-oilang.git"
     },
     "dependencies": {
+        "axios": "^1.13.5",
         "elysia": "^1.4.25",
         "ioredis": "^5.9.3",
         "pg": "^8.18.0"
