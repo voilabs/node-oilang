@@ -137,11 +137,14 @@ export const elysiaHandler = (oilang: OILang, options?: Options): AppType => {
                 localesApp.post(
                     "/",
                     async ({ body }) => {
-                        const { error, data } = await oilang.locales.create(
-                            body.locale,
-                            body.native_name,
-                            body.english_name,
-                        );
+                        const { error, data } = await oilang.locales.create({
+                            locale: body.locale,
+                            nativeName: body.native_name,
+                            englishName: body.english_name,
+                            isDefault: body.is_default,
+                            translationsFromDefault:
+                                body.translations_from_default,
+                        });
                         if (error) {
                             return response(
                                 false,
@@ -161,6 +164,8 @@ export const elysiaHandler = (oilang: OILang, options?: Options): AppType => {
                             locale: t.String(),
                             native_name: t.String(),
                             english_name: t.String(),
+                            is_default: t.Optional(t.Boolean()),
+                            translations_from_default: t.Optional(t.Boolean()),
                         }),
                     },
                 );

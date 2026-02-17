@@ -29,6 +29,7 @@ class Locales {
         locale: string,
         nativeName: string,
         englishName: string,
+        isDefault?: boolean,
     ): Promise<ActionResponse<LocaleData>> {
         try {
             const existing = await this.client.query(
@@ -42,8 +43,8 @@ class Locales {
             }
 
             const result = await this.client.query(
-                `INSERT INTO ${this.schema} (code, native_name, english_name) VALUES ($1, $2, $3) RETURNING *`,
-                [locale, nativeName, englishName],
+                `INSERT INTO ${this.schema} (code, native_name, english_name, is_default) VALUES ($1, $2, $3, $4) RETURNING *`,
+                [locale, nativeName, englishName, isDefault],
             );
             return { success: true, data: result.rows[0] };
         } catch (error) {
@@ -63,15 +64,33 @@ class Locales {
         }
     }
 
+    async getDefault(): Promise<ActionResponse<LocaleData>> {
+        try {
+            const result = await this.client.query(
+                `SELECT * FROM ${this.schema} WHERE is_default = true`,
+            );
+            return { success: true, data: result.rows[0] };
+        } catch (error) {
+            return { success: false, error };
+        }
+    }
+
     async update(
         locale: string,
         nativeName: string,
         englishName: string,
+        isDefault?: boolean,
     ): Promise<ActionResponse<LocaleData>> {
         try {
+            if (isDefault) {
+                await this.client.query(
+                    `UPDATE ${this.schema} SET is_default = false WHERE is_default = true`,
+                );
+            }
+
             const result = await this.client.query(
-                `UPDATE ${this.schema} SET native_name = $2, english_name = $3 WHERE code = $1 RETURNING *`,
-                [locale, nativeName, englishName],
+                `UPDATE ${this.schema} SET native_name = $2, english_name = $3, is_default = $4 WHERE code = $1 RETURNING *`,
+                [locale, nativeName, englishName, isDefault],
             );
 
             if (result.rows.length === 0) {
@@ -98,12 +117,20 @@ class Translations {
         this.localesSchema = localesSchema;
     }
 
-    async list(): Promise<ActionResponse<TranslationData[]>> {
+    async list(locale?: string): Promise<ActionResponse<TranslationData[]>> {
         try {
-            const result = await this.client.query(
-                `SELECT * FROM ${this.schema}`,
-            );
-            return { success: true, data: result.rows };
+            if (locale) {
+                const result = await this.client.query(
+                    `SELECT * FROM ${this.schema} WHERE locale_id = $1`,
+                    [locale],
+                );
+                return { success: true, data: result.rows };
+            } else {
+                const result = await this.client.query(
+                    `SELECT * FROM ${this.schema}`,
+                );
+                return { success: true, data: result.rows };
+            }
         } catch (error) {
             return { success: false, error };
         }
@@ -186,17 +213,6 @@ export class PostgreSQL {
             schemaNames: { keys: string; locales: string };
         },
     ) {
-        const object =
-            typeof config === "string"
-                ? {
-                      connectionString: config,
-                      idleTimeoutMillis: 0,
-                      connectionTimeoutMillis: 0,
-                  }
-                : Object.assign(config, {
-                      idleTimeoutMillis: 0,
-                      connectionTimeoutMillis: 0,
-                  });
         this.pool = new Pool(
             typeof config === "string" ? { connectionString: config } : config,
         );
@@ -221,6 +237,7 @@ export class PostgreSQL {
                 code VARCHAR(10) PRIMARY KEY,
                 native_name VARCHAR(255) NOT NULL,
                 english_name VARCHAR(255) NOT NULL,
+                is_default BOOLEAN DEFAULT false,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );

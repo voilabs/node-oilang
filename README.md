@@ -98,7 +98,7 @@ Access via `oilang.locales`.
 - **`list(): Promise<ActionResponse<LocaleData[]>>`**
   Retrieves all available locales from the store.
 
-- **`create(locale: string, nativeName: string, englishName: string): Promise<ActionResponse<LocaleData>>`**
+- **`create(config: { locale: string; nativeName: string; englishName: string; translationsFromDefault?: boolean; isDefault?: boolean }): Promise<ActionResponse<LocaleData>>`**
   Creates a new locale in the database and updates the store.
 
 - **`delete(locale: string): Promise<ActionResponse<LocaleData>>`**
@@ -113,8 +113,8 @@ Access via `oilang.translations`.
 
 #### Methods
 
-- **`list(locale: string): Promise<Record<string, string>>`**
-  Retrieves all translations for a specific locale from the store. Returns a key-value map.
+- **`list(locale: string): Promise<ActionResponse<TranslationData[]>>`**
+  Retrieves all translations for a specific locale from the store. Returns an array of translation objects.
 
 - **`create(locale: string, config: { key: string; value: string }): Promise<ActionResponse<TranslationData>>`**
   Adds a translation key-value pair for a specific locale.
@@ -221,6 +221,8 @@ The handler exposes the following endpoints under the `/oilang` prefix:
             locale: string;
             native_name: string;
             english_name: string;
+            is_default?: boolean;
+            translations_from_default?: boolean;
         }
         ```
 
@@ -244,7 +246,7 @@ The handler exposes the following endpoints under the `/oilang` prefix:
 - **`GET /oilang/translations/:locale`**
   Get translations for a specific locale.
     - **Params**: `locale` (string)
-    - **Query**: `format` (optional, "true" for nested JSON)
+    - **Query**: `format` (optional, "true" for nested JSON). If not provided, returns an array of translation objects.
 
 - **`POST /oilang/translations/:locale`** \*
   Add multiple translations.
@@ -337,6 +339,12 @@ Most methods return a result object pattern to handle errors gracefully without 
 type ActionResponse<T> =
     | { error: Error & { code?: string }; data: null }
     | { error: null; data: T };
+
+interface TranslationData {
+    locale_id: string;
+    key: string;
+    value: string;
+}
 ```
 
 ## Utils

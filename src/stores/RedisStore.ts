@@ -84,6 +84,37 @@ export class RedisStore {
         }
     }
 
+    async setMany(
+        config:
+            | {
+                  seed: "translations";
+                  locale: string;
+                  translations: Record<string, string>;
+              }
+            | {
+                  seed: "locales";
+                  locales: Record<string, string>;
+              },
+    ) {
+        if (config.seed === "translations") {
+            const pipeline = this.client.pipeline();
+            for (const [key, value] of Object.entries(config.translations)) {
+                pipeline.hset(
+                    `${this.prefix}translations:${config.locale}`,
+                    key,
+                    value,
+                );
+            }
+            await pipeline.exec();
+        } else {
+            const pipeline = this.client.pipeline();
+            for (const [key, value] of Object.entries(config.locales)) {
+                pipeline.hset(`${this.prefix}locales`, key, value);
+            }
+            await pipeline.exec();
+        }
+    }
+
     async get(
         config:
             | {

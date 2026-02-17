@@ -36,15 +36,24 @@ class Locale {
         };
     }
 
-    async create(
-        locale: string,
-        nativeName: string,
-        englishName: string,
-    ): Promise<ActionResponse<LocaleData>> {
+    async create({
+        locale,
+        nativeName,
+        englishName,
+        translationsFromDefault = false,
+        isDefault = false,
+    }: {
+        locale: string;
+        nativeName: string;
+        englishName: string;
+        translationsFromDefault?: boolean;
+        isDefault?: boolean;
+    }): Promise<ActionResponse<LocaleData>> {
         const response = await this.database.locales.create(
             locale,
             nativeName,
             englishName,
+            isDefault,
         );
 
         if (response.success) {
@@ -52,6 +61,31 @@ class Locale {
                 seed: "locales",
                 locale: response.data,
             });
+
+            if (translationsFromDefault) {
+                const defaultLocale = await this.database.locales.getDefault();
+                if (defaultLocale.success) {
+                    const translations = await this.database.translations.list(
+                        defaultLocale.data.code,
+                    );
+                    if (translations.success) {
+                        translations.data.forEach(async (translation) => {
+                            await this.database.translations.create(
+                                translation.key,
+                                translation.value,
+                                response.data.code,
+                            );
+
+                            this.store.set({
+                                seed: "translations",
+                                locale: response.data.code,
+                                key: translation.key,
+                                value: translation.value,
+                            });
+                        });
+                    }
+                }
+            }
 
             return {
                 error: null,

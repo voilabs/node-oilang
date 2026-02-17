@@ -44,6 +44,34 @@ export class MemoryStore {
         }
     }
 
+    async setMany(
+        config:
+            | {
+                  seed: "translations";
+                  locale: string;
+                  translations: Record<string, string>;
+              }
+            | {
+                  seed: "locales";
+                  locales: Record<string, string>;
+              },
+    ) {
+        if (config.seed === "translations") {
+            for (const [key, value] of Object.entries(config.translations)) {
+                this.translations[config.locale][key] = value;
+            }
+        } else {
+            for (const [key, value] of Object.entries(config.locales)) {
+                this.locales.push({
+                    code: key,
+                    native_name: value,
+                    english_name: value,
+                });
+                this.translations[key] = {};
+            }
+        }
+    }
+
     async get(
         config:
             | {
