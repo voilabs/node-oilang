@@ -1,4 +1,5 @@
 import Redis from "ioredis";
+import { LocaleData } from "../types";
 
 export class RedisStore {
     private client: Redis;
@@ -15,11 +16,7 @@ export class RedisStore {
     }
 
     async load(
-        locales: Array<{
-            code: string;
-            native_name: string;
-            english_name: string;
-        }>,
+        locales: Array<LocaleData>,
         translations: Record<string, Record<string, string>>,
     ) {
         const existingLocales = await this.client.hvals(
@@ -62,11 +59,7 @@ export class RedisStore {
               }
             | {
                   seed: "locales";
-                  locale: {
-                      code: string;
-                      native_name: string;
-                      english_name: string;
-                  };
+                  locale: LocaleData;
               },
     ) {
         if (config.seed === "translations") {
@@ -81,37 +74,6 @@ export class RedisStore {
                 config.locale.code,
                 JSON.stringify(config.locale),
             );
-        }
-    }
-
-    async setMany(
-        config:
-            | {
-                  seed: "translations";
-                  locale: string;
-                  translations: Record<string, string>;
-              }
-            | {
-                  seed: "locales";
-                  locales: Record<string, string>;
-              },
-    ) {
-        if (config.seed === "translations") {
-            const pipeline = this.client.pipeline();
-            for (const [key, value] of Object.entries(config.translations)) {
-                pipeline.hset(
-                    `${this.prefix}translations:${config.locale}`,
-                    key,
-                    value,
-                );
-            }
-            await pipeline.exec();
-        } else {
-            const pipeline = this.client.pipeline();
-            for (const [key, value] of Object.entries(config.locales)) {
-                pipeline.hset(`${this.prefix}locales`, key, value);
-            }
-            await pipeline.exec();
         }
     }
 
@@ -201,6 +163,7 @@ export class RedisStore {
                   locale: {
                       native_name: string;
                       english_name: string;
+                      is_default: boolean;
                   };
               },
     ) {

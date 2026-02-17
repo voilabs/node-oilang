@@ -392,3 +392,40 @@ import { unwrap } from "@voilabs/oilang/utils";
 const value = unwrap("<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>", "tr-TR");
 // Output: "Merhaba"
 ```
+
+#### `unwrapObject(string: string): Record<string, string>`
+
+Extracts the value for a specific locale from a wrapped string.
+
+```typescript
+import { unwrapObject } from "@voilabs/oilang/utils";
+
+const value = unwrapObject("<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>");
+// Output: { "en-US": "Hello", "tr-TR": "Merhaba" }
+```
+
+# Changelog
+
+## [0.0.25] - 2026-02-17
+
+### Added
+
+- **Core Library (`src/index.ts`)**:
+    - Implemented `OILang` class as the main entry point for managing internationalization.
+    - Added `Locale` and `Translation` classes to handle domain-specific operations.
+    - Implemented `init()` method to load data from the persistent database into the cache store.
+    - Added `refreshCache()` method to reload data at runtime.
+    - Added comprehensive error handling with `ActionResponse` type.
+
+- **Data Stores (`src/stores`)**:
+    - **MemoryStore**: Implemented in-memory storage for fast, local development and testing.
+    - **RedisStore**: Implemented Redis-based storage using `ioredis` for distributed caching and persistence.
+    - Defined common interface for stores supporting `load`, `set`, `get`, `getAll`, `remove`, and `update` operations.
+
+- **Utilities (`src/utils`)**:
+    - Added `unwrap` function to extract locale-specific strings from XML-wrapped values.
+    - Added `unwrapObject` to parse strings into key-value locale maps.
+
+- **Types (`src/types.ts`)**:
+    - Defined `LocaleData` interface for locale structure (code, native/english names, etc.).
+    - Defined `TranslationData` interface for translation key-value pairs.

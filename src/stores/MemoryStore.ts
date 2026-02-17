@@ -1,17 +1,11 @@
+import { LocaleData } from "../types";
+
 export class MemoryStore {
     private translations: Record<string, Record<string, string>> = {};
-    private locales: Array<{
-        code: string;
-        native_name: string;
-        english_name: string;
-    }> = [];
+    private locales: Array<LocaleData> = [];
 
     async load(
-        locales: Array<{
-            code: string;
-            native_name: string;
-            english_name: string;
-        }>,
+        locales: Array<LocaleData>,
         translations: Record<string, Record<string, string>>,
     ) {
         this.locales = locales;
@@ -28,11 +22,7 @@ export class MemoryStore {
               }
             | {
                   seed: "locales";
-                  locale: {
-                      code: string;
-                      native_name: string;
-                      english_name: string;
-                  };
+                  locale: LocaleData;
               },
     ) {
         if (config.seed === "translations") {
@@ -41,34 +31,6 @@ export class MemoryStore {
         } else {
             this.locales.push(config.locale);
             this.translations[config.locale.code] = {};
-        }
-    }
-
-    async setMany(
-        config:
-            | {
-                  seed: "translations";
-                  locale: string;
-                  translations: Record<string, string>;
-              }
-            | {
-                  seed: "locales";
-                  locales: Record<string, string>;
-              },
-    ) {
-        if (config.seed === "translations") {
-            for (const [key, value] of Object.entries(config.translations)) {
-                this.translations[config.locale][key] = value;
-            }
-        } else {
-            for (const [key, value] of Object.entries(config.locales)) {
-                this.locales.push({
-                    code: key,
-                    native_name: value,
-                    english_name: value,
-                });
-                this.translations[key] = {};
-            }
         }
     }
 
@@ -102,9 +64,9 @@ export class MemoryStore {
               },
     ) {
         if (config.seed === "translations") {
-            return this.translations[config.locale];
+            return this.translations[config.locale] as Record<string, string>;
         } else {
-            return this.locales;
+            return this.locales as LocaleData[];
         }
     }
 

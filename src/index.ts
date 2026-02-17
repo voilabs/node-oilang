@@ -26,13 +26,41 @@ class Locale {
     }
 
     async list() {
-        const response = await this.store.getAll({
+        const response = (await this.store.getAll({
             seed: "locales",
+        })) as LocaleData[];
+
+        const defaultTranslations = await this.store.getAll({
+            seed: "translations",
+            locale: response.find((e) => e.is_default)!.code,
         });
+
+        const res = await Promise.all(
+            response.map(async (locale) => {
+                const translations = await this.store.getAll({
+                    seed: "translations",
+                    locale: locale.code,
+                });
+
+                const notSameValuesCount = Object.values(
+                    defaultTranslations,
+                ).filter((e, i) => e !== Object.values(translations)[i]).length;
+                const totalCount = Object.values(translations).length;
+                const percent = locale.is_default
+                    ? 100
+                    : (notSameValuesCount / totalCount) * 100;
+
+                return {
+                    ...locale,
+                    percent,
+                    total_translations: totalCount,
+                };
+            }),
+        );
 
         return {
             error: null,
-            data: response,
+            data: res,
         };
     }
 
@@ -123,6 +151,7 @@ class Locale {
         locale: string,
         nativeName: string,
         englishName: string,
+        isDefault?: boolean,
     ): Promise<ActionResponse<LocaleData>> {
         const response = await this.database.locales.update(
             locale,
@@ -137,6 +166,7 @@ class Locale {
                 locale: {
                     native_name: nativeName,
                     english_name: englishName,
+                    is_default: isDefault || response.data.is_default,
                 },
             });
             return {
@@ -329,6 +359,7 @@ export class OILang {
                 code: l.code,
                 native_name: l.native_name,
                 english_name: l.english_name,
+                is_default: l.is_default,
                 created_at: l.created_at,
                 updated_at: l.updated_at,
             }));
