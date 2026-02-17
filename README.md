@@ -45,7 +45,12 @@ async function main() {
     await oilang.init();
 
     // Create a new locale
-    await oilang.locales.create("en-US", "English (US)", "English");
+    await oilang.locales.create({
+        locale: "en-US",
+        nativeName: "English",
+        englishName: "English",
+        isDefault: true,
+    });
 
     // Add a translation key
     await oilang.translations.create("en-US", {
@@ -57,6 +62,14 @@ async function main() {
     // Example: Translations are stored in memory or Redis as a key-value pair.
     const translations = await oilang.translations.list("en-US");
     console.log(translations);
+
+    // Create a new locale (reference translations from default locale)
+    await oilang.locales.create({
+        locale: "[localeCode]",
+        nativeName: "[nativeName]",
+        englishName: "[englishName]",
+        translationsFromDefault: true,
+    });
 }
 
 main();
