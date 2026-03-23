@@ -30,29 +30,49 @@ class Locale {
             seed: "locales",
         })) as LocaleData[];
 
-        const defaultTranslations = await this.store.getAll({
+        const defaultTranslations = (await this.store.getAll({
             seed: "translations",
             locale: response.find((e) => e.is_default)!.code,
-        });
+        })) as Record<string, string>;
 
         const res = await Promise.all(
             response.map(async (locale) => {
-                const translations = await this.store.getAll({
+                const translations: any = await this.store.getAll({
                     seed: "translations",
                     locale: locale.code,
                 });
 
-                const notSameValuesCount = Object.values(
-                    defaultTranslations,
-                ).filter((e, i) => e !== Object.values(translations)[i]).length;
-                const totalCount = Object.values(translations).length;
-                const percent = locale.is_default
-                    ? 100
-                    : (notSameValuesCount / totalCount) * 100;
+                // Tüm anahtarlar üzerinden dönüyoruz
+                const keys = Object.keys(defaultTranslations);
+                const totalCount = keys.length;
+
+                if (totalCount === 0)
+                    return { ...locale, percent: 0, total_translations: 0 };
+
+                // Eğer dil varsayılansa direkt %100 de
+                if (locale.is_default) {
+                    return {
+                        ...locale,
+                        percent: 100,
+                        total_translations: totalCount,
+                    };
+                }
+
+                // Çevrilmiş olanları sayalım:
+                // Mevcut dildeki değer var mı VE default dildekinden farklı mı?
+                const translatedCount = keys.filter((key) => {
+                    const defaultValue = defaultTranslations[key];
+                    const currentValue = translations[key];
+
+                    // KURAL: Değer boş değilse VE default değerden farklıysa çevrilmiş sayılır
+                    return currentValue && currentValue !== defaultValue;
+                }).length;
+
+                const percent = (translatedCount / totalCount) * 100;
 
                 return {
                     ...locale,
-                    percent,
+                    percent: Math.round(percent), // İstersen yuvarlayabilirsin
                     total_translations: totalCount,
                 };
             }),
