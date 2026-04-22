@@ -1,4 +1,4 @@
-import { OILang } from "@voilabs/oilang";
+import { OILang } from "../";
 import Elysia, { t } from "elysia";
 
 type Options = {

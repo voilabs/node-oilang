@@ -1,10 +1,10 @@
 import type { MemoryStore } from "./stores/MemoryStore";
-import type { PostgreSQL } from "./adapters/PostgreSQL";
+import type { DatabaseAdapter } from "./types";
 import type { RedisStore } from "./stores/RedisStore";
 import { LocaleData, TranslationData } from "./types";
 
 type AdapterConfig = {
-    database: InstanceType<typeof PostgreSQL>;
+    database: DatabaseAdapter;
     store: InstanceType<typeof MemoryStore> | InstanceType<typeof RedisStore>;
     fallbackLocale?: string;
 };
@@ -351,9 +351,11 @@ export class OILang {
 
     public locales: Locale;
     public translations: Translation;
+    public adapter: AdapterConfig["database"];
 
     constructor(private config: AdapterConfig) {
         this.database = config.database;
+        this.adapter = config.database;
         this.store = config.store;
         this.fallbackLocale = config.fallbackLocale ?? "en-US";
 
@@ -409,4 +411,17 @@ export class OILang {
     async refreshCache() {
         return await this.init();
     }
+
+    getAdapter() {
+        return this.adapter;
+    }
+}
+
+export function defineConfig(config: {
+    configPath?: string;
+    outputPath?: string;
+    path?: string;
+    output?: string;
+}) {
+    return config;
 }

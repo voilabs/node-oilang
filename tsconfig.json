@@ -1,7 +1,8 @@
 {
     "compilerOptions": {
         "target": "ESNext",
-        "module": "Preserve",
+        "module": "CommonJS",
+        "moduleResolution": "Node",
         "strict": true,
         "outDir": "./dist",
         "esModuleInterop": true,

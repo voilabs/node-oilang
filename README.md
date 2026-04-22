@@ -1,33 +1,76 @@
+<div align="center">
+
 # OILang
 
-OILang is a robust internationalization (i18n) handling library designed for performance and flexibility. It employs a dual-layer architecture, utilizing a persistent database as the source of truth and a high-performance in-memory or Redis-based store for fast runtime access. This ensures that your application remains responsive while maintaining data integrity and persistence.
+**A robust internationalization (i18n) library for Node.js & Bun — built for performance, flexibility and DX.**
+
+[![npm](https://img.shields.io/badge/npm-%40voilabs%2Foilang-red)](https://www.npmjs.com/package/@voilabs/oilang)
+[![TypeScript](https://img.shields.io/badge/TypeScript-Ready-blue)]()
+[![License](https://img.shields.io/badge/license-MIT-green)]()
+
+</div>
+
+---
+
+OILang is a dual-layer i18n engine: a **persistent adapter** (PostgreSQL / Drizzle ORM) acts as the source of truth, while a **runtime store** (Memory / Redis) provides fast access during request handling.
+
+It ships with a first-class **CLI** (`bunx oilang generate`), built-in **framework handlers** (Elysia), and a fully typed API.
+
+---
+
+## Table of Contents
+
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [CLI](#cli)
+- [Configuration File](#configuration-file)
+- [API Reference](#api-reference)
+- [Adapters](#adapters)
+- [Stores](#stores)
+- [Elysia Handler](#elysia-handler)
+    - [API Endpoints](#api-endpoints)
+- [Utils](#utils)
+- [Troubleshooting](#troubleshooting)
+- [Changelog](#changelog)
+
+---
 
 ## Features
 
-- **Dual-Layer Architecture**: Combines persistent storage with fast caching.
-- **Flexible Storage**: Choose between in-memory storage for simple use cases or Redis for distributed systems.
-- **Customizable Schemas**: Configurable database schema names to fit existing database structures.
-- **Type-Safe**: Built with TypeScript for reliable development.
+- Dual-layer architecture (persistent DB + runtime cache)
+- PostgreSQL and Drizzle ORM adapters (`pg`, `mysql`, `sqlite`)
+- CLI schema generator (SQL or Drizzle schema files)
+- First-class TypeScript types
+- Pluggable stores: `MemoryStore`, `RedisStore`
+- Built-in Elysia handler with ready-to-use REST endpoints
+
+---
 
 ## Installation
-
-To use OILang, you need to install the package and its peer dependencies.
 
 ```bash
 bun add @voilabs/oilang
 ```
 
-## Usage
+Or with npm:
 
-Here is a basic example of how to initialize and use OILang within your application.
+```bash
+npm install @voilabs/oilang
+```
 
-```typescript
+---
+
+## Quick Start
+
+### PostgreSQL + MemoryStore
+
+```ts
 import { OILang } from "@voilabs/oilang";
 import { PostgreSQL } from "@voilabs/oilang/adapters";
 import { MemoryStore } from "@voilabs/oilang/stores";
 
-// Initialize the library
-const oilang = new OILang({
+export const oilang = new OILang({
     database: new PostgreSQL(
         "postgresql://user:password@localhost:5432/dbname",
         {
@@ -40,392 +83,390 @@ const oilang = new OILang({
     store: new MemoryStore(),
 });
 
-async function main() {
-    // Connect to database and load data into store
-    await oilang.init();
-
-    // Create a new locale
-    await oilang.locales.create({
-        locale: "en-US",
-        nativeName: "English",
-        englishName: "English",
-        isDefault: true,
-    });
-
-    // Add a translation key
-    await oilang.translations.create("en-US", {
-        key: "greeting",
-        value: "Hello, World!",
-    });
-
-    // Retrieve translations
-    // Example: Translations are stored in memory or Redis as a key-value pair.
-    const translations = await oilang.translations.list("en-US");
-    console.log(translations);
-
-    // Create a new locale (reference translations from default locale)
-    await oilang.locales.create({
-        locale: "[localeCode]",
-        nativeName: "[nativeName]",
-        englishName: "[englishName]",
-        translationsFromDefault: true,
-    });
-}
-
-main();
+await oilang.init();
 ```
+
+### Drizzle + RedisStore
+
+```ts
+import { OILang } from "@voilabs/oilang";
+import { DrizzleAdapter } from "@voilabs/oilang/adapters";
+import { RedisStore } from "@voilabs/oilang/stores";
+import { db } from "./db";
+
+export const oilang = new OILang({
+    database: new DrizzleAdapter(db, {
+        provider: "pg", // "pg" | "mysql" | "sqlite"
+        schemaNames: {
+            keys: "i18n_keys",
+            locales: "i18n_locales",
+        },
+    }),
+    store: new RedisStore(process.env.REDIS_URL!),
+});
+
+await oilang.init();
+```
+
+---
+
+## CLI
+
+OILang ships with a CLI that statically analyzes your config and generates schema files.
+
+### Command
+
+```bash
+bunx oilang generate --path <output-file-or-directory> --config <path-to-oilang-config>
+```
+
+### Examples
+
+Generate a Drizzle schema file:
+
+```bash
+bunx oilang generate \
+  --path ./src/server/drizzle/oilang-schema.ts \
+  --config ./src/server/lib/oilang.ts
+```
+
+Generate into a directory (auto-picks file name):
+
+```bash
+bunx oilang generate --path ./database
+```
+
+If `--config` is omitted, CLI will:
+
+1. Read from `oilang.config.ts` if available.
+2. Otherwise search the project for a file exporting `oilang` and create a config for you.
+
+---
+
+## Configuration File
+
+OILang uses an optional `oilang.config.ts` at project root:
+
+```ts
+import { defineConfig } from "@voilabs/oilang";
+
+export default defineConfig({
+    configPath: "./src/server/lib/oilang.ts",
+    outputPath: "./src/server/drizzle/oilang-schema.ts",
+});
+```
+
+Supported keys:
+
+| Key          | Description                                     |
+| ------------ | ----------------------------------------------- |
+| `configPath` | Path to the file exporting your OILang instance |
+| `outputPath` | Destination for generated schema file           |
+| `output`     | Alias for `outputPath`                          |
+| `path`       | Alias for `outputPath`                          |
+
+---
 
 ## API Reference
 
-### OILang
+### `OILang`
 
-The main entry point for the library. It orchestrates the interaction between the database adapter and the store, delegating specific operations to `locales` and `translations` namespaces.
+Main entry point. Orchestrates the adapter and the store.
 
-#### Constructor
+| Method           | Description                                     |
+| ---------------- | ----------------------------------------------- |
+| `init()`         | Connect the adapter and hydrate the store cache |
+| `refreshCache()` | Reload all locales/translations into the store  |
+| `getAdapter()`   | Return the configured database adapter instance |
+| `locales`        | Locale management namespace                     |
+| `translations`   | Translation management namespace                |
 
-```typescript
-new OILang(config: AdapterConfig)
+### `oilang.locales`
+
+| Method                                                                              | Description        |
+| ----------------------------------------------------------------------------------- | ------------------ |
+| `list()`                                                                            | List all locales   |
+| `create({ locale, nativeName, englishName, isDefault?, translationsFromDefault? })` | Create a locale    |
+| `update(locale, nativeName, englishName, isDefault?)`                               | Update locale info |
+| `delete(locale)`                                                                    | Delete a locale    |
+
+### `oilang.translations`
+
+| Method                               | Description                                       |
+| ------------------------------------ | ------------------------------------------------- |
+| `list(locale)`                       | List all translations for a locale                |
+| `create(locale, { key, value })`     | Add a translation                                 |
+| `update(locale, key, newValue)`      | Update a translation                              |
+| `delete(locale, key)`                | Delete a translation                              |
+| `translate(locale, key, variables?)` | Resolve a translation (with variables + fallback) |
+
+---
+
+## Adapters
+
+### `PostgreSQL`
+
+Uses the `pg` library and manages tables on `connect()` via `CREATE TABLE IF NOT EXISTS`.
+
+```ts
+new PostgreSQL(connectionString, {
+    schemaNames: { keys: "i18n_keys", locales: "i18n_locales" },
+});
 ```
 
-- `config`: Configuration object containing initialized `database` and `store` instances.
+### `DrizzleAdapter`
 
-#### Methods
+Works with the Drizzle ORM. Supports PostgreSQL, MySQL and SQLite providers.
 
-- **`init(): Promise<void>`**
-  Connects to the database and initializes the store by loading existing locales and translations.
-
-- **`refreshCache(): Promise<void>`**
-  Refreshes the internal cache by reloading data from the database.
-
-#### Namespaces
-
-- **`oilang.locales`**: Manages locale operations.
-- **`oilang.translations`**: Manages translation operations.
-
-### Locales
-
-Access via `oilang.locales`.
-
-#### Methods
-
-- **`list(): Promise<ActionResponse<LocaleData[]>>`**
-  Retrieves all available locales from the store.
-
-- **`create(config: { locale: string; nativeName: string; englishName: string; translationsFromDefault?: boolean; isDefault?: boolean }): Promise<ActionResponse<LocaleData>>`**
-  Creates a new locale in the database and updates the store.
-
-- **`delete(locale: string): Promise<ActionResponse<LocaleData>>`**
-  Deletes a locale and its associated translations from both the database and the store.
-
-- **`update(locale: string, nativeName: string, englishName: string): Promise<ActionResponse<LocaleData>>`**
-  Updates locale information in the database and store.
-
-### Translations
-
-Access via `oilang.translations`.
-
-#### Methods
-
-- **`list(locale: string): Promise<ActionResponse<TranslationData[]>>`**
-  Retrieves all translations for a specific locale from the store. Returns an array of translation objects.
-
-- **`create(locale: string, config: { key: string; value: string }): Promise<ActionResponse<TranslationData>>`**
-  Adds a translation key-value pair for a specific locale.
-
-- **`update(locale: string, key: string, newValue: string): Promise<ActionResponse<TranslationData>>`**
-  Updates an existing translation value.
-
-- **`delete(locale: string, key: string): Promise<ActionResponse<TranslationData>>`**
-  Deletes a translation key.
-
-- **`translate(locale: string, key: string, variables?: Record<string, string | number>): Promise<string>`**
-  Retrieves a single translation, optionally performing variable interpolation. Uses fallback locale if translation is missing.
-
-### Adapters
-
-#### PostgreSQL
-
-Handles persistent storage of locales and translations.
-
-**Constructor**
-
-```typescript
-new PostgreSQL(connectionString: string | ClientConfig, config: { schemaNames: { keys: string; locales: string } })
+```ts
+new DrizzleAdapter(db, {
+    provider: "pg", // "pg" | "mysql" | "sqlite"
+    schemaNames: { keys: "i18n_keys", locales: "i18n_locales" },
+    schemas: { locales, translations }, // optional; auto-detected otherwise
+});
 ```
 
-- `connectionString`: PostgreSQL connection string or configuration object.
-- `config.schemaNames`: Custom table names for keys and locales.
+- `schemas` is optional. When omitted, OILang tries to discover tables via Drizzle internals.
+- CLI generates a matching Drizzle schema file so you can import it back into your project.
 
-### Stores
+---
 
-Stores handle the runtime access to data. They act as a cache that is synchronized with the database.
+## Stores
 
-#### MemoryStore
+### `MemoryStore`
 
-Stores data in the application's memory. Suitable for single-instance applications or development.
+Fast in-process cache — ideal for single-node apps and development.
 
-**Constructor**
-
-```typescript
+```ts
 new MemoryStore();
 ```
 
-#### RedisStore
+### `RedisStore`
 
-Stores data in a Redis instance. Essential for distributed applications or when data persistence across restarts (without DB reload) is desired.
+Shared cache for distributed deployments.
 
-**Constructor**
-
-```typescript
-new RedisStore(connectionString: string, options?: { prefix?: string })
+```ts
+new RedisStore(connectionString, { prefix?: "oilang:" });
 ```
 
-- `connectionString`: Redis connection URL (default: `redis://localhost:6379`).
-- `options.prefix`: specific prefix for Redis keys (default: `oilang:`).
+---
 
-## Frameworks Support
+## Elysia Handler
 
-OILang provides built-in handlers to easily integrate with popular web frameworks.
+Mount OILang as a ready-to-use Elysia module:
 
-### Elysia.js
-
-The `elysiaHandler` allows you to expose RESTful API endpoints for managing locales and translations directly from your Elysia application.
-
-#### Usage
-
-```typescript
+```ts
 import { Elysia } from "elysia";
 import { elysiaHandler } from "@voilabs/oilang/handlers";
 
-const app = new Elysia()
-    .use(elysiaHandler(oilang)) // oilang instance
-    .get("/", ({ store }) => {
-        return `Current locale: ${store.locale}`;
-    })
+new Elysia()
+    .use(
+        elysiaHandler(oilang, {
+            onAuthHandle: async ({ request }) => {
+                // optional auth pre-handler
+            },
+        }),
+    )
     .listen(3000);
 ```
 
-#### Context & Derive
+### API Endpoints
 
-The handler enriches the Elysia context:
+All endpoints are mounted under the `/oilang` prefix.  
+Endpoints marked `🔒` support the optional `onAuthHandle` hook.
 
-- **State**: Adds `locale` to the global state (`store.locale`).
+#### Locales
 
-#### API Endpoints
+| Method   | Route                         | Description            |
+| -------- | ----------------------------- | ---------------------- |
+| `GET`    | `/oilang/locales`             | List all locales       |
+| `POST`   | `/oilang/locales`             | Create a new locale 🔒 |
+| `PUT`    | `/oilang/locales/:localeCode` | Update a locale 🔒     |
+| `DELETE` | `/oilang/locales/:locale`     | Delete a locale 🔒     |
 
-The handler exposes the following endpoints under the `/oilang` prefix:
+**`POST /oilang/locales`** body:
 
-> **Note**: Endpoints marked with `*` support the `onAuthHandle` hook for authentication.
-
-##### Locales
-
-- **`POST /oilang/set-locale`**
-  Sets the current locale for the session/request.
-    - **Body**: `{ locale: string }`
-
-- **`GET /oilang/locales`**
-  List all available locales.
-
-- **`POST /oilang/locales`** \*
-  Create a new locale.
-    - **Body**:
-        ```typescript
-        {
-            locale: string;
-            native_name: string;
-            english_name: string;
-            is_default?: boolean;
-            translations_from_default?: boolean;
-        }
-        ```
-
-- **`PUT /oilang/locales/:localeCode`** \*
-  Update an existing locale.
-    - **Params**: `localeCode` (string)
-    - **Body**:
-        ```typescript
-        {
-            native_name: string;
-            english_name: string;
-        }
-        ```
-
-- **`DELETE /oilang/locales/:locale`** \*
-  Delete a locale.
-    - **Params**: `locale` (string)
-
-##### Translations
-
-- **`GET /oilang/translations/:locale`**
-  Get translations for a specific locale.
-    - **Params**: `locale` (string)
-    - **Query**: `format` (optional, "true" for nested JSON). If not provided, returns an array of translation objects.
-
-- **`POST /oilang/translations/:locale`** \*
-  Add multiple translations.
-    - **Params**: `locale` (string)
-    - **Body**:
-        ```typescript
-        {
-            translations: {
-                key: string;
-                value: string;
-            }
-            [];
-        }
-        ```
-
-- **`PUT /oilang/translations/:locale`** \*
-  Update multiple translations.
-    - **Params**: `locale` (string)
-    - **Body**:
-        ```typescript
-        {
-            translations: {
-                key: string;
-                value: string;
-            }
-            [];
-        }
-        ```
-
-- **`DELETE /oilang/translations/:locale`** \*
-  Delete multiple translations.
-    - **Params**: `locale` (string)
-    - **Body**:
-        ```typescript
-        {
-            translations: {
-                key: string;
-            }
-            [];
-        }
-        ```
-
-##### System
-
-- **`POST /oilang/refresh`** \*
-  Refresh the internal cache from the database.
-
-#### Options
-
-You can pass an optional configuration object to `elysiaHandler`:
-
-```typescript
-elysiaHandler(oilang, {
-    onAuthHandle: async ({ request }) => {
-        // Implement authentication logic here
-    },
-});
-```
-
-- `onAuthHandle`: A hook to run before handling requests, useful for authentication.
-
-## Database Schema
-
-The Database adapter automatically creates the necessary tables if they do not exist.
-
-### Locales Table
-
-Stores information about supported languages.
-
-- `code` (Primary Key): The locale code (e.g., "en-US").
-- `native_name`: Name of the language in its own script.
-- `english_name`: Name of the language in English.
-- `created_at`: Timestamp of creation.
-- `updated_at`: Timestamp of last update.
-
-### Keys Table
-
-Stores the translation strings.
-
-- `id` (Primary Key): Unique identifier.
-- `key`: The translation key (e.g., "homepage.title").
-- `value`: The translated string.
-- `locale_id` (Foreign Key): References `Locales(code)`.
-
-## Return Types
-
-Most methods return a result object pattern to handle errors gracefully without throwing.
-
-```typescript
-type ActionResponse<T> =
-    | { error: Error & { code?: string }; data: null }
-    | { error: null; data: T };
-
-interface TranslationData {
-    locale_id: string;
-    key: string;
-    value: string;
+```json
+{
+    "locale": "en-US",
+    "native_name": "English",
+    "english_name": "English",
+    "is_default": true,
+    "translations_from_default": false
 }
 ```
 
+**`PUT /oilang/locales/:localeCode`** body:
+
+```json
+{
+    "native_name": "English",
+    "english_name": "English"
+}
+```
+
+#### Translations
+
+| Method   | Route                          | Description                                            |
+| -------- | ------------------------------ | ------------------------------------------------------ |
+| `GET`    | `/oilang/translations/:locale` | Fetch translations. `?format=true` returns nested JSON |
+| `POST`   | `/oilang/translations/:locale` | Add multiple translations 🔒                           |
+| `PUT`    | `/oilang/translations/:locale` | Update multiple translations 🔒                        |
+| `DELETE` | `/oilang/translations/:locale` | Delete multiple translations 🔒                        |
+
+**`POST` / `PUT` body:**
+
+```json
+{
+    "translations": [
+        { "key": "home.title", "value": "Welcome" },
+        { "key": "home.subtitle", "value": "Hello there" }
+    ]
+}
+```
+
+**`DELETE` body:**
+
+```json
+{
+    "translations": [{ "key": "home.title" }]
+}
+```
+
+#### Session
+
+| Method | Route                | Description                          |
+| ------ | -------------------- | ------------------------------------ |
+| `POST` | `/oilang/set-locale` | Set the active locale on the session |
+
+Body:
+
+```json
+{ "locale": "en-US" }
+```
+
+#### System
+
+| Method | Route             | Description                           |
+| ------ | ----------------- | ------------------------------------- |
+| `POST` | `/oilang/refresh` | Refresh the internal cache from DB 🔒 |
+
+---
+
 ## Utils
 
-OILang provides utility functions to help with string manipulation for i18n.
+### `wrap(locales: Record<string, string>): string`
 
-### Wrap & Unwrap
-
-Helper functions to handle multi-language strings formats used in some legacy systems or specific storage patterns.
-
-#### `wrap(locales: Record<string, string>): string`
-
-Wraps a dictionary of locale-value pairs into a single string format `<locale>value</locale>`.
-
-```typescript
+```ts
 import { wrap } from "@voilabs/oilang/utils";
 
-const wrapped = wrap({
-    "en-US": "Hello",
-    "tr-TR": "Merhaba",
-});
-// Output: "<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>"
+wrap({ "en-US": "Hello", "tr-TR": "Merhaba" });
+// => "<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>"
 ```
 
-#### `unwrap(string: string, locale: string, fallbackLocale?: string): string`
+### `unwrap(string, locale, fallbackLocale?): string`
 
-Extracts the value for a specific locale from a wrapped string.
-
-```typescript
+```ts
 import { unwrap } from "@voilabs/oilang/utils";
 
-const value = unwrap("<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>", "tr-TR");
-// Output: "Merhaba"
+unwrap("<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>", "tr-TR");
+// => "Merhaba"
 ```
 
-#### `unwrapObject(string: string): Record<string, string>`
+### `unwrapObject(string): Record<string, string>`
 
-Extracts the value for a specific locale from a wrapped string.
-
-```typescript
+```ts
 import { unwrapObject } from "@voilabs/oilang/utils";
 
-const value = unwrapObject("<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>");
-// Output: { "en-US": "Hello", "tr-TR": "Merhaba" }
+unwrapObject("<en-US>Hello</en-US><tr-TR>Merhaba</tr-TR>");
+// => { "en-US": "Hello", "tr-TR": "Merhaba" }
 ```
 
-# Changelog
+---
 
-## [0.0.25] - 2026-02-17
+## Troubleshooting
 
-### Added
+- If the CLI cannot resolve your config, check `configPath` inside `oilang.config.ts`.
+- When CLI runtime import fails, it falls back to static source analysis automatically.
+- Missing `schemaNames`? Use explicit string literals in your config so the analyzer can detect them.
+- On Windows, CLI internally uses proper file URLs for path compatibility.
 
-- **Core Library (`src/index.ts`)**:
-    - Implemented `OILang` class as the main entry point for managing internationalization.
-    - Added `Locale` and `Translation` classes to handle domain-specific operations.
-    - Implemented `init()` method to load data from the persistent database into the cache store.
-    - Added `refreshCache()` method to reload data at runtime.
-    - Added comprehensive error handling with `ActionResponse` type.
+---
 
-- **Data Stores (`src/stores`)**:
-    - **MemoryStore**: Implemented in-memory storage for fast, local development and testing.
-    - **RedisStore**: Implemented Redis-based storage using `ioredis` for distributed caching and persistence.
-    - Defined common interface for stores supporting `load`, `set`, `get`, `getAll`, `remove`, and `update` operations.
+## Changelog
 
-- **Utilities (`src/utils`)**:
-    - Added `unwrap` function to extract locale-specific strings from XML-wrapped values.
-    - Added `unwrapObject` to parse strings into key-value locale maps.
+### [0.0.35] - 2026-04-22
 
-- **Types (`src/types.ts`)**:
-    - Defined `LocaleData` interface for locale structure (code, native/english names, etc.).
-    - Defined `TranslationData` interface for translation key-value pairs.
+#### Changed
+
+- **CLI Internal Refactor (`src/cli`)**:
+    - Database schema generation logic was split into dedicated modules under `src/cli/utils/databases/`.
+    - `generate` command now uses modular static-analysis helpers (`drizzle`, `postgres`, `shared`, `index`).
+- **Adapter Contract Simplification**:
+    - Removed `getFileInfo()` requirement from the adapter interface and implementations.
+    - Schema generation is now fully handled by CLI static analysis.
+
+#### Fixed
+
+- **PostgreSQL Runtime Bootstrap (`src/adapters/PostgreSQL.ts`)**:
+    - Restored `CREATE TABLE IF NOT EXISTS` flow inside `connect()` so PostgreSQL users keep auto-init behavior.
+
+### [0.0.34] - 2026-04-22
+
+#### Fixed
+
+- Improved `schemaNames` parsing for more robust `keys`/`locales` detection.
+- PostgreSQL fallback generation now better respects custom `schemaNames`.
+
+### [0.0.33] - 2026-04-22
+
+#### Fixed
+
+- Resilient config loading for CLI: `import` → `require` → static source-analysis fallback.
+- Better schema generation reliability for `PostgreSQL` and `drizzleAdapter` configs.
+
+### [0.0.32] - 2026-04-22
+
+#### Changed
+
+- Safer config loading flow (ESM/CJS compatibility).
+- Better `oilang.config.ts` handling (`configPath`, `outputPath`, `output`, `path`).
+- CLI refactored into modular folders (`commands`, `utils`, `index`).
+
+### [0.0.31] - 2026-04-22
+
+#### Changed
+
+- Added `defineConfig(...)` helper and extended config keys.
+
+### [0.0.30] - 2026-04-22
+
+#### Fixed
+
+- Windows config import path compatibility using proper file URL conversion.
+
+### [0.0.29] - 2026-04-22
+
+#### Added
+
+- Drizzle adapter: optional `schemas` + automatic schema discovery.
+
+### [0.0.28] - 2026-04-22
+
+#### Changed
+
+- Standardized adapter file generation via `{ content, name }`.
+- Improved output target resolution.
+
+### [0.0.27] - 2026-04-22
+
+#### Added
+
+- Drizzle ORM support (`src/adapters/Drizzle.ts`).
+- CLI generator (`bunx oilang generate`).
+
+### [0.0.25] - 2026-02-17
+
+#### Added
+
+- Initial public release (`OILang`, locale/translation APIs, stores, utilities).

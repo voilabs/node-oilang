@@ -1,9 +1,11 @@
 import { PostgreSQL } from "./src/adapters/PostgreSQL";
+import { DrizzleAdapter } from "./src/adapters/Drizzle";
 import { OILang } from "./src/index";
 import { MemoryStore } from "./src/stores/MemoryStore";
 
 const adapter = new OILang({
-    database: new PostgreSQL(process.env.POSTGRES_URL!, {
+    database: new DrizzleAdapter(process.env.POSTGRES_URL!, {
+        provider: "pg",
         schemaNames: {
             keys: "keys",
             locales: "locales",
