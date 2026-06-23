@@ -26,11 +26,14 @@ export class MemoryStore {
               },
     ) {
         if (config.seed === "translations") {
-            (this.translations[config.locale] as any)[config.key] =
-                config.value;
+            this.translations[config.locale] ??= {};
+            this.translations[config.locale][config.key] = config.value;
         } else {
+            this.locales = this.locales.filter(
+                (l) => l.code !== config.locale.code,
+            );
             this.locales.push(config.locale);
-            this.translations[config.locale.code] = {};
+            this.translations[config.locale.code] ??= {};
         }
     }
 
@@ -64,7 +67,7 @@ export class MemoryStore {
               },
     ) {
         if (config.seed === "translations") {
-            return this.translations[config.locale] as Record<string, string>;
+            return this.translations[config.locale] ?? {};
         } else {
             return this.locales as LocaleData[];
         }

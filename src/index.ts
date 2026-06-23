@@ -7,11 +7,54 @@ type AdapterConfig = {
     database: DatabaseAdapter;
     store: InstanceType<typeof MemoryStore> | InstanceType<typeof RedisStore>;
     fallbackLocale?: string;
+    throwOnInitError?: boolean;
 };
 
 type ActionResponse<T> =
     | { error: Error & { code?: string }; data: null }
     | { error: null; data: T };
+
+type OILangStatus = {
+    initialized: boolean;
+    databaseAvailable: boolean;
+    storeLoaded: boolean;
+    lastError?: Error;
+};
+
+function toError(error: unknown): Error {
+    return error instanceof Error ? error : new Error(String(error));
+}
+
+function getResponseError(response: { success: boolean; error?: unknown }) {
+    return !response.success && response.error
+        ? toError(response.error)
+        : undefined;
+}
+
+const warningCache = new Map<string, string>();
+
+function warn(context: string, error: unknown) {
+    const message = toError(error).message;
+    if (warningCache.get(context) === message) return;
+
+    warningCache.set(context, message);
+    console.warn(`[OILang] ${context}: ${message}`);
+}
+
+function errorResponse<T>(error: unknown): ActionResponse<T> {
+    return {
+        error: toError(error) as Error & { code?: string },
+        data: null,
+    };
+}
+
+async function tryStore(operation: () => Promise<unknown>, context: string) {
+    try {
+        await operation();
+    } catch (error) {
+        warn(context, error);
+    }
+}
 
 class Locale {
     private database: AdapterConfig["database"];
@@ -25,63 +68,70 @@ class Locale {
         this.store = store;
     }
 
-    async list() {
-        const response = (await this.store.getAll({
-            seed: "locales",
-        })) as LocaleData[];
+    async list(): Promise<ActionResponse<Array<LocaleData & {
+        percent: number;
+        total_translations: number;
+    }>>> {
+        try {
+            const response = (await this.store.getAll({
+                seed: "locales",
+            })) as LocaleData[];
 
-        const defaultTranslations = (await this.store.getAll({
-            seed: "translations",
-            locale: response.find((e) => e.is_default)!.code,
-        })) as Record<string, string>;
+            const defaultLocale = response.find((e) => e.is_default);
+            const defaultTranslations = defaultLocale
+                ? ((await this.store.getAll({
+                      seed: "translations",
+                      locale: defaultLocale.code,
+                  })) as Record<string, string>)
+                : {};
 
-        const res = await Promise.all(
-            response.map(async (locale) => {
-                const translations: any = await this.store.getAll({
-                    seed: "translations",
-                    locale: locale.code,
-                });
+            const res = await Promise.all(
+                response.map(async (locale) => {
+                    const translations = (await this.store.getAll({
+                        seed: "translations",
+                        locale: locale.code,
+                    })) as Record<string, string>;
 
-                // Tüm anahtarlar üzerinden dönüyoruz
-                const keys = Object.keys(defaultTranslations);
-                const totalCount = keys.length;
+                    const keys = Object.keys(defaultTranslations);
+                    const totalCount = keys.length;
 
-                if (totalCount === 0)
-                    return { ...locale, percent: 0, total_translations: 0 };
+                    if (totalCount === 0) {
+                        return { ...locale, percent: 0, total_translations: 0 };
+                    }
 
-                // Eğer dil varsayılansa direkt %100 de
-                if (locale.is_default) {
+                    if (locale.is_default) {
+                        return {
+                            ...locale,
+                            percent: 100,
+                            total_translations: totalCount,
+                        };
+                    }
+
+                    const translatedCount = keys.filter((key) => {
+                        const defaultValue = defaultTranslations[key];
+                        const currentValue = translations[key];
+
+                        return currentValue && currentValue !== defaultValue;
+                    }).length;
+
+                    const percent = (translatedCount / totalCount) * 100;
+
                     return {
                         ...locale,
-                        percent: 100,
+                        percent: Math.round(percent),
                         total_translations: totalCount,
                     };
-                }
+                }),
+            );
 
-                // Çevrilmiş olanları sayalım:
-                // Mevcut dildeki değer var mı VE default dildekinden farklı mı?
-                const translatedCount = keys.filter((key) => {
-                    const defaultValue = defaultTranslations[key];
-                    const currentValue = translations[key];
-
-                    // KURAL: Değer boş değilse VE default değerden farklıysa çevrilmiş sayılır
-                    return currentValue && currentValue !== defaultValue;
-                }).length;
-
-                const percent = (translatedCount / totalCount) * 100;
-
-                return {
-                    ...locale,
-                    percent: Math.round(percent), // İstersen yuvarlayabilirsin
-                    total_translations: totalCount,
-                };
-            }),
-        );
-
-        return {
-            error: null,
-            data: res,
-        };
+            return {
+                error: null,
+                data: res,
+            };
+        } catch (error) {
+            warn("Locale cache could not be read", error);
+            return errorResponse(error);
+        }
     }
 
     async create({
@@ -97,18 +147,29 @@ class Locale {
         translationsFromDefault?: boolean;
         isDefault?: boolean;
     }): Promise<ActionResponse<LocaleData>> {
-        const response = await this.database.locales.create(
-            locale,
-            nativeName,
-            englishName,
-            isDefault,
-        );
+        try {
+            const response = await this.database.locales.create(
+                locale,
+                nativeName,
+                englishName,
+                isDefault,
+            );
 
-        if (response.success) {
-            this.store.set({
-                seed: "locales",
-                locale: response.data,
-            });
+            if (!response.success) {
+                return {
+                    error: response.error,
+                    data: null,
+                };
+            }
+
+            await tryStore(
+                () =>
+                    this.store.set({
+                        seed: "locales",
+                        locale: response.data,
+                    }),
+                "Locale cache could not be updated",
+            );
 
             if (translationsFromDefault) {
                 const defaultLocale = await this.database.locales.getDefault();
@@ -117,20 +178,27 @@ class Locale {
                         defaultLocale.data.code,
                     );
                     if (translations.success) {
-                        translations.data.forEach(async (translation) => {
-                            await this.database.translations.create(
-                                translation.key,
-                                translation.value,
-                                response.data.code,
-                            );
+                        for (const translation of translations.data) {
+                            const created =
+                                await this.database.translations.create(
+                                    translation.key,
+                                    translation.value,
+                                    response.data.code,
+                                );
 
-                            this.store.set({
-                                seed: "translations",
-                                locale: response.data.code,
-                                key: translation.key,
-                                value: translation.value,
-                            });
-                        });
+                            if (!created.success) continue;
+
+                            await tryStore(
+                                () =>
+                                    this.store.set({
+                                        seed: "translations",
+                                        locale: response.data.code,
+                                        key: translation.key,
+                                        value: translation.value,
+                                    }),
+                                "Translation cache could not be updated",
+                            );
+                        }
                     }
                 }
             }
@@ -139,31 +207,39 @@ class Locale {
                 error: null,
                 data: response.data,
             };
-        } else {
-            return {
-                error: response.error,
-                data: null,
-            };
+        } catch (error) {
+            warn("Locale create failed", error);
+            return errorResponse(error);
         }
     }
 
     async delete(locale: string) {
-        const response = await this.database.locales.delete(locale);
+        try {
+            const response = await this.database.locales.delete(locale);
 
-        if (response.success) {
-            this.store.remove({
-                seed: "locales",
-                locale,
-            });
+            if (!response.success) {
+                return {
+                    error: response.error,
+                    data: null,
+                };
+            }
+
+            await tryStore(
+                () =>
+                    this.store.remove({
+                        seed: "locales",
+                        locale,
+                    }),
+                "Locale cache could not be removed",
+            );
+
             return {
                 error: null,
                 data: response.data,
             };
-        } else {
-            return {
-                error: response.error,
-                data: null,
-            };
+        } catch (error) {
+            warn("Locale delete failed", error);
+            return errorResponse(error);
         }
     }
 
@@ -173,31 +249,42 @@ class Locale {
         englishName: string,
         isDefault?: boolean,
     ): Promise<ActionResponse<LocaleData>> {
-        const response = await this.database.locales.update(
-            locale,
-            nativeName,
-            englishName,
-        );
+        try {
+            const response = await this.database.locales.update(
+                locale,
+                nativeName,
+                englishName,
+                isDefault,
+            );
 
-        if (response.success) {
-            this.store.update({
-                seed: "locales",
-                code: locale,
-                locale: {
-                    native_name: nativeName,
-                    english_name: englishName,
-                    is_default: isDefault || response.data.is_default,
-                },
-            });
+            if (!response.success) {
+                return {
+                    error: response.error,
+                    data: null,
+                };
+            }
+
+            await tryStore(
+                () =>
+                    this.store.update({
+                        seed: "locales",
+                        code: locale,
+                        locale: {
+                            native_name: nativeName,
+                            english_name: englishName,
+                            is_default: isDefault ?? response.data.is_default,
+                        },
+                    }),
+                "Locale cache could not be updated",
+            );
+
             return {
                 error: null,
                 data: response.data,
             };
-        } else {
-            return {
-                error: response.error,
-                data: null,
-            };
+        } catch (error) {
+            warn("Locale update failed", error);
+            return errorResponse(error);
         }
     }
 }
@@ -218,43 +305,58 @@ class Translation {
     }
 
     async list(locale: string): Promise<ActionResponse<TranslationData[]>> {
-        const response = await this.store.getAll({
-            seed: "translations",
-            locale,
-        });
+        try {
+            const response = await this.store.getAll({
+                seed: "translations",
+                locale,
+            });
 
-        return {
-            error: null,
-            data: response as any,
-        };
+            return {
+                error: null,
+                data: response as any,
+            };
+        } catch (error) {
+            warn("Translation cache could not be read", error);
+            return errorResponse(error);
+        }
     }
 
     async create(
         locale: string,
         config: { key: string; value: string },
     ): Promise<ActionResponse<TranslationData>> {
-        const response = await this.database.translations.create(
-            config.key,
-            config.value,
-            locale,
-        );
-
-        if (response.success) {
-            this.store.set({
-                seed: "translations",
+        try {
+            const response = await this.database.translations.create(
+                config.key,
+                config.value,
                 locale,
-                key: config.key,
-                value: config.value,
-            });
+            );
+
+            if (!response.success) {
+                return {
+                    error: response.error,
+                    data: null,
+                };
+            }
+
+            await tryStore(
+                () =>
+                    this.store.set({
+                        seed: "translations",
+                        locale,
+                        key: config.key,
+                        value: config.value,
+                    }),
+                "Translation cache could not be updated",
+            );
+
             return {
                 error: null,
                 data: response.data,
             };
-        } else {
-            return {
-                error: response.error,
-                data: null,
-            };
+        } catch (error) {
+            warn("Translation create failed", error);
+            return errorResponse(error);
         }
     }
 
@@ -263,50 +365,72 @@ class Translation {
         key: string,
         newValue: string,
     ): Promise<ActionResponse<TranslationData>> {
-        const response = await this.database.translations.update(
-            key,
-            newValue,
-            locale,
-        );
-
-        if (response.success) {
-            this.store.update({
-                seed: "translations",
-                locale,
+        try {
+            const response = await this.database.translations.update(
                 key,
-                value: newValue,
-            });
+                newValue,
+                locale,
+            );
+
+            if (!response.success) {
+                return {
+                    error: response.error,
+                    data: null,
+                };
+            }
+
+            await tryStore(
+                () =>
+                    this.store.update({
+                        seed: "translations",
+                        locale,
+                        key,
+                        value: newValue,
+                    }),
+                "Translation cache could not be updated",
+            );
 
             return {
                 error: null,
                 data: response.data,
             };
-        } else {
-            return {
-                error: response.error,
-                data: null,
-            };
+        } catch (error) {
+            warn("Translation update failed", error);
+            return errorResponse(error);
         }
     }
 
     async delete(locale: string, key: string) {
-        const response = await this.database.translations.delete(key, locale);
-
-        if (response.success) {
-            this.store.remove({
-                seed: "translations",
-                locale,
+        try {
+            const response = await this.database.translations.delete(
                 key,
-            });
+                locale,
+            );
+
+            if (!response.success) {
+                return {
+                    error: response.error,
+                    data: null,
+                };
+            }
+
+            await tryStore(
+                () =>
+                    this.store.remove({
+                        seed: "translations",
+                        locale,
+                        key,
+                    }),
+                "Translation cache could not be removed",
+            );
+
             return {
                 error: null,
                 data: response.data,
             };
-        } else {
-            return {
-                error: response.error,
-                data: null,
-            };
+        } catch (error) {
+            warn("Translation delete failed", error);
+            return errorResponse(error);
         }
     }
 
@@ -315,32 +439,37 @@ class Translation {
         key: string,
         variables?: Record<string, string | number>,
     ): Promise<string> {
-        let translation = await this.store.get({
-            seed: "translations",
-            locale,
-            key,
-        });
-
-        if (!translation && this.fallbackLocale) {
-            translation = await this.store.get({
+        try {
+            let translation = await this.store.get({
                 seed: "translations",
-                locale: this.fallbackLocale,
+                locale,
                 key,
             });
-        }
 
-        if (!translation) return key;
-
-        if (variables) {
-            for (const [varKey, varValue] of Object.entries(variables)) {
-                translation = translation.replace(
-                    new RegExp(`{{${varKey}}}`, "g"),
-                    String(varValue),
-                );
+            if (!translation && this.fallbackLocale) {
+                translation = await this.store.get({
+                    seed: "translations",
+                    locale: this.fallbackLocale,
+                    key,
+                });
             }
-        }
 
-        return translation;
+            if (!translation) return key;
+
+            if (variables) {
+                for (const [varKey, varValue] of Object.entries(variables)) {
+                    translation = translation.replace(
+                        new RegExp(`{{${varKey}}}`, "g"),
+                        String(varValue),
+                    );
+                }
+            }
+
+            return translation;
+        } catch (error) {
+            warn("Translation cache could not be read", error);
+            return key;
+        }
     }
 }
 
@@ -348,6 +477,11 @@ export class OILang {
     private database: AdapterConfig["database"];
     private store: AdapterConfig["store"];
     private fallbackLocale: string | undefined;
+    private status: OILangStatus = {
+        initialized: false,
+        databaseAvailable: false,
+        storeLoaded: false,
+    };
 
     public locales: Locale;
     public translations: Translation;
@@ -369,14 +503,23 @@ export class OILang {
     }
 
     async init(): Promise<void> {
-        await this.database.connect();
+        try {
+            await this.database.connect();
+            this.status.databaseAvailable = true;
 
-        const [locales, translations] = await Promise.all([
-            this.database.locales.list(),
-            this.database.translations.list(),
-        ]);
+            const [locales, translations] = await Promise.all([
+                this.database.locales.list(),
+                this.database.translations.list(),
+            ]);
 
-        if (locales.success && translations.success) {
+            if (!locales.success || !translations.success) {
+                throw (
+                    getResponseError(locales) ??
+                    getResponseError(translations) ??
+                    new Error("Failed to load locales or translations")
+                );
+            }
+
             const loadableLocales = locales.data.map((l: any) => ({
                 code: l.code,
                 native_name: l.native_name,
@@ -402,9 +545,32 @@ export class OILang {
                 {} as Record<string, Record<string, string>>,
             );
 
-            await this.store.load(loadableLocales, loadableTranslations);
-        } else {
-            throw new Error("Failed to load locales or translations");
+            try {
+                await this.store.load(loadableLocales, loadableTranslations);
+                this.status.storeLoaded = true;
+                this.status.lastError = undefined;
+            } catch (error) {
+                this.status.storeLoaded = false;
+                this.status.lastError = toError(error);
+                warn("Store cache could not be loaded", error);
+            }
+
+            this.status.initialized = true;
+        } catch (error) {
+            const initError = toError(error);
+
+            this.status = {
+                initialized: false,
+                databaseAvailable: false,
+                storeLoaded: false,
+                lastError: initError,
+            };
+
+            warn("Database initialization failed", initError);
+
+            if (this.config.throwOnInitError) {
+                throw initError;
+            }
         }
     }
 
@@ -414,6 +580,10 @@ export class OILang {
 
     getAdapter() {
         return this.adapter;
+    }
+
+    getStatus() {
+        return { ...this.status };
     }
 }
 
